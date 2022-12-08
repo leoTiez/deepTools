@@ -72,6 +72,12 @@ def get_optional_args():
                           type=float,
                           required=False)
 
+    optional.add_argument('--centerFragmentSize',
+                          type=int,
+                          default=3,
+                          help='For centred MNase fragments, use only the --centerFragmentSize nucleotides. '
+                          'Default is 3.')
+
     optional.add_argument('--MNase',
                           help='Determine nucleosome positions from MNase-seq data. '
                           'Only 3 nucleotides at the center of each fragment are counted. '
@@ -203,6 +209,7 @@ def main(args=None):
                             minFragmentLength=args.minFragmentLength,
                             maxFragmentLength=args.maxFragmentLength,
                             chrsToSkip=args.ignoreForNormalization,
+                            centerFragmentSize=args.centerFragmentSize,
                             verbose=args.verbose,
                             )
 
@@ -393,6 +400,11 @@ class CenterFragment(writeBedGraph.WriteBedGraph):
     The coverage of the fragment is defined as the 2 or 3 basepairs at the
     center of the fragment length.
     """
+    def __init__(self, listBam, centerFragmentSize=3, **kwargs):
+        super(CenterFragment, self).__init__(listBam, **kwargs)
+        cfs = centerFragmentSize if centerFragmentSize % 2 == 1 else centerFragmentSize + 1
+        self.cfs = cfs
+
     def get_fragment_from_read(self, read):
         """
         Takes a proper pair fragment of high quality and limited
@@ -403,14 +415,20 @@ class CenterFragment(writeBedGraph.WriteBedGraph):
         # only paired forward reads are considered
         # Fragments have already been filtered according to length
         if read.is_proper_pair and not read.is_reverse and 1 < abs(read.tlen):
-            # distance between pairs is even return two bases at the center
+            # distance between pairs is even return an even number of bases at the center
             if read.tlen % 2 == 0:
-                fragment_start = read.pos + read.tlen / 2 - 1
-                fragment_end = fragment_start + 2
+                fragment_start = read.pos + read.tlen // 2 - self.cfs // 2
+                fragment_end = fragment_start + self.cfs - 1
 
-            # distance is odd return three bases at the center
+            # distance is odd return an odd number of bases at the center
             else:
-                fragment_start = read.pos + read.tlen / 2 - 1
-                fragment_end = fragment_start + 3
+                fragment_start = read.pos + read.tlen // 2 - self.cfs // 2
+                fragment_end = fragment_start + self.cfs
 
         return [(fragment_start, fragment_end)]
+
+
+if __name__ == '__main__':
+    main(sys.argv[1:])
+
+
